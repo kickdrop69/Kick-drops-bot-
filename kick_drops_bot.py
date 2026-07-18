@@ -115,6 +115,23 @@ def _pick(d: dict, *keys, default=None):
     return default
 
 
+def _extract_channels(raw: dict) -> list:
+    """Kick's campaign objects sometimes list participating channels/streamers.
+    Field name isn't documented, so we probe common candidates and shapes."""
+    raw_channels = _pick(raw, "channels", "streamers", "participating_channels", "streams", default=[])
+    if not isinstance(raw_channels, list):
+        return []
+    names = []
+    for c in raw_channels:
+        if isinstance(c, str):
+            names.append(c)
+        elif isinstance(c, dict):
+            name = _pick(c, "username", "slug", "name", "channel_name", "display_name")
+            if name:
+                names.append(str(name))
+    return names
+
+
 def _normalize_campaign(raw: dict) -> dict:
     """Kick hasn't published a schema for this endpoint, so we probe a few
     likely key names instead of assuming one exact shape."""
@@ -128,6 +145,7 @@ def _normalize_campaign(raw: dict) -> dict:
         "starts": _pick(raw, "starts_at", "start_date", "started_at", default=None),
         "ends": _pick(raw, "ends_at", "end_date", "ended_at", default=None),
         "status": _pick(raw, "status", "state", default=None),
+        "channels": _extract_channels(raw),
     }
 
 
@@ -192,6 +210,11 @@ def format_campaign_message(c: dict) -> str:
     if c["starts"] or c["ends"]:
         window = f"🕒 {c['starts'] or '?'} → {c['ends'] or '?'}"
         lines.append(html.escape(window))
+    if c["channels"]:
+        chan_list = ", ".join(f"kick.com/{html.escape(ch)}" for ch in c["channels"][:10])
+        lines.append(f"📺 <b>Watch here:</b> {chan_list}")
+    else:
+        lines.append("📺 Channel list wasn't in the data — check the Drops page for participating streams.")
     lines.append(f'<a href="{DROPS_PAGE_URL}">Open Kick Drops</a>')
     return "\n".join(lines)
 
@@ -200,15 +223,33 @@ def format_campaign_message(c: dict) -> str:
 # Main loop
 # ---------------------------------------------------------------------------
 
+STATUS_FILE = Path(__file__).parent / "last_status.json"
+
+
+def _write_status(ok: bool, campaign_count: int = 0, error: str = None) -> None:
+    status = {
+        "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "fetch_ok": ok,
+        "active_campaigns": campaign_count,
+        "error": error,
+    }
+    try:
+        STATUS_FILE.write_text(json.dumps(status, indent=2))
+    except OSError as e:
+        log.warning("Could not write status file: %s", e)
+
+
 def check_once(seen: set) -> set:
     try:
         campaigns = fetch_campaigns()
     except Exception as e:
         log.error("Fetch failed: %s", e)
+        _write_status(ok=False, error=str(e))
         return seen
 
     new = [c for c in campaigns if c["id"] not in seen]
     log.info("Checked campaigns: %d active, %d new", len(campaigns), len(new))
+    _write_status(ok=True, campaign_count=len(campaigns))
 
     for c in new:
         send_telegram_message(format_campaign_message(c))
