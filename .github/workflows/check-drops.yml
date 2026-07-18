@@ -44,10 +44,10 @@ jobs:
         run: |
           git config user.name "kick-drops-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add seen_campaigns.json 2>/dev/null || true
+          git add seen_campaigns.json last_status.json 2>/dev/null || true
           if git diff --staged --quiet; then
             git commit --allow-empty -m "keepalive: checked $(date -u +'%Y-%m-%d %H:%M UTC')"
           else
-            git commit -m "update seen campaigns"
+            git commit -m "update state"
           fi
           git push
