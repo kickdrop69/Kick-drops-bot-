@@ -1,0 +1,41 @@
+name: Kick Chat Listener
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_runtime_seconds:
+        description: 'Override runtime budget in seconds (used for quick tests)'
+        required: false
+        default: ''
+
+concurrency:
+  group: kick-chat-listener
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests cloudscraper websocket-client
+
+      - name: Listen to chat
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KICK_CHANNEL: starladder
+          ALERT_KEYWORDS: "stake drop"
+          MAX_RUNTIME_SECONDS: ${{ github.event.inputs.max_runtime_seconds != '' && github.event.inputs.max_runtime_seconds || '19800' }}
+        run: python chat_listener.py
