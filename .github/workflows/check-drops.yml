@@ -2,8 +2,8 @@ name: Check Kick Drops
 
 on:
   schedule:
-    # Roughly every 15 minutes, offset from the hour to avoid busy periods
-    - cron: '3,18,33,48 * * * *'
+    # Every 5 minutes - the fastest interval GitHub Actions allows
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       test_message:
