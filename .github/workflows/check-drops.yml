@@ -1,0 +1,53 @@
+name: Check Kick Drops
+
+on:
+  schedule:
+    # Roughly every 15 minutes, offset from the hour to avoid busy periods
+    - cron: '3,18,33,48 * * * *'
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Send a test message instead of checking drops'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          KICK_COOKIE: ${{ secrets.KICK_COOKIE }}
+        run: |
+          if [ "${{ github.event.inputs.test_message }}" = "true" ]; then
+            python kick_drops_bot.py --test
+          else
+            python kick_drops_bot.py --once
+          fi
+
+      - name: Save state so we don't re-alert the same campaigns
+        run: |
+          git config user.name "kick-drops-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add seen_campaigns.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            git commit --allow-empty -m "keepalive: checked $(date -u +'%Y-%m-%d %H:%M UTC')"
+          else
+            git commit -m "update seen campaigns"
+          fi
+          git push
