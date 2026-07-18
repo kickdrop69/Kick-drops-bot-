@@ -1,0 +1,36 @@
+name: Kick Chat Listener Watchdog
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure listener is running or queued, start it if not
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+          BASE="https://api.github.com/repos/$REPO/actions/workflows/listen-chat.yml/runs"
+
+          ACTIVE=$(curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$BASE?status=in_progress&per_page=1" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['workflow_runs']))")
+          QUEUED=$(curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$BASE?status=queued&per_page=1" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['workflow_runs']))")
+
+          echo "active runs: $ACTIVE, queued runs: $QUEUED"
+
+          if [ "$ACTIVE" = "0" ] && [ "$QUEUED" = "0" ]; then
+            echo "No listener active or queued — starting one."
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/actions/workflows/listen-chat.yml/dispatches" \
+              -d '{"ref":"main"}'
+          else
+            echo "Listener already covered, nothing to do."
+          fi
