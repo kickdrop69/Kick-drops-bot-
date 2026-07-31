@@ -1,6 +1,6 @@
 {
-  "checked_at": "2026-07-30T23:45:47Z",
-  "fetch_ok": false,
-  "active_campaigns": 0,
-  "error": "504 Server Error: Gateway Timeout for url: https://web.kick.com/api/v1/drops/campaigns"
+  "checked_at": "2026-07-31T10:02:55Z",
+  "fetch_ok": true,
+  "active_campaigns": 25,
+  "error": null
 }
